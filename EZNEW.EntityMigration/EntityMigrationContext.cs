@@ -1,59 +1,29 @@
-﻿using EZNEW.Application;
-using System;
-using System.IO;
-using System.Linq;
+﻿using System;
 using Microsoft.EntityFrameworkCore;
-using EZNEW.Configuration;
+using Microsoft.EntityFrameworkCore.Metadata;
 using EZNEW.Develop.Entity;
-using System.ComponentModel;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using System.ComponentModel.DataAnnotations;
-using EZNEW.ValueType;
 using EZNEW.Data;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace EZNEW.EntityMigration
 {
     public class EntityMigrationContext : DbContext
     {
         /// <summary>
-        /// Database type
+        /// Database server
         /// </summary>
-        protected DatabaseServerType DatabaseType { get; set; }
+        protected DatabaseServer DatabaseServer { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            var entityConfigurations = EntityManager.GetAllEntityConfigurations();
-            foreach (var entityCfg in entityConfigurations)
+            if (string.IsNullOrWhiteSpace(DatabaseServer?.ConnectionString))
             {
-                var entityBuilder = modelBuilder.Entity(entityCfg.EntityType)
-                    .ToTable(entityCfg.TableName)
-                    .HasComment(entityCfg.Comment);
-                foreach (var field in entityCfg.AllFields.Values)
-                {
-                    var propertyBuilder = entityBuilder.Property(field.DataType, field.FieldName)
-                        .HasComment(field.Comment);
-
-                    //column type
-                    var columnTypeName = string.IsNullOrWhiteSpace(field.DbTypeName) ? EntityMigrationManager.GetColumnTypeName(DatabaseType, field.DataType) : field.DbTypeName;
-                    if (!string.IsNullOrWhiteSpace(columnTypeName))
-                    {
-                        propertyBuilder = propertyBuilder.HasColumnType(columnTypeName);
-                    }
-                    //maxlength
-                    if (field.MaxLength > 0)
-                    {
-                        propertyBuilder = propertyBuilder.HasMaxLength(field.MaxLength);
-                    }
-                    //allow null
-                    propertyBuilder = propertyBuilder.IsRequired(field.IsRequired || !field.DataType.AllowNull());
-                    //fixed length
-                    propertyBuilder = propertyBuilder.IsFixedLength(field.IsFixedLength);
-                    if (field.IsPrimaryKey)
-                    {
-                        entityBuilder.HasKey(field.FieldName);
-                    }
-                };
+                throw new Exception($"{nameof(DatabaseServer)}.{nameof(DatabaseServer.ConnectionString)} is null or empty");
             }
+            var migrationModelBuilder = EntityMigrationManager.GetModelBuilder(DatabaseServer.ServerType);
+            migrationModelBuilder?.CreateModel(DatabaseServer.ServerType, modelBuilder);
             base.OnModelCreating(modelBuilder);
         }
     }
